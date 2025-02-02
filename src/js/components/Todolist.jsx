@@ -5,70 +5,66 @@ const Todolist = () => {
     const [inputValue, setInputValue] = useState('');
     const [hoveredIndex, setHoveredIndex] = useState(-1);
 
-    // URL de la API (reemplaza "usuario" con el nombre de usuario deseado)
-    const API_URL = 'https://playground.4geeks.com/todo/users/alejandro99'
+    const USER_API_URL = 'https://playground.4geeks.com/todo/users/alejandro99'
+    const TODOS_API_URL = 'https://playground.4geeks.com/todo/todos/alejandro99'
 
-    // Cargar tareas del servidor al montar el componente
+    // Cargar tareas iniciales desde la API
     useEffect(() => {
-        fetch(API_URL, { method: "GET" })
-            .then(resp => {
-                if (!resp.ok) throw new Error('Error al cargar las tareas');
-                return resp.json();
-            })
-            .then(data => {
-                setTareas(data); // Actualiza el estado con las tareas del servidor
-            })
-            .catch(error => {
-                console.error('Error:', error);
-            });
-    }, []); // Dependencias vacías: solo se ejecuta al montar el componente
+        fetch(USER_API_URL)
+            .then(response => response.json())
+            .then(data => setTareas(data.todos || []))
+            .catch(error => console.error('Error al cargar tareas:', error));
+    }, []);
 
-    // Función para sincronizar las tareas con el servidor
-    const sincronizarTareas = (nuevasTareas) => {
-        fetch(API_URL, {
-            method: "PUT",
-            body: JSON.stringify(nuevasTareas),
-            headers: {
-                "Content-Type": "application/json"
-            }
-        })
-            .then(resp => {
-                if (!resp.ok) throw new Error('Error al sincronizar las tareas');
-                return resp.json();
-            })
-            .then(data => {
-                console.log('Tareas sincronizadas:', data);
-            })
-            .catch(error => {
-                console.error('Error:', error);
-            });
-    };
-
+    // Agregar una nueva tarea
     const agregarTarea = () => {
         if (inputValue.trim() !== '') {
-            const nuevasTareas = [...tareas, inputValue];
-            setTareas(nuevasTareas);
-            setInputValue("");
-            sincronizarTareas(nuevasTareas); // Sincroniza con el servidor
+            const requestOptions = {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    label: inputValue,
+                    is_done: false
+                })
+            };
+            fetch(TODOS_API_URL, requestOptions)
+                .then(response => response.json())
+                .then(data => {
+                    setTareas(prevTareas => [...prevTareas, data]);
+                    setInputValue('');
+                })
+                .catch(error => console.error('Error al agregar tarea:', error));
         }
     };
 
-    const eliminarTarea = (index) => {
-        const nuevasTareas = tareas.filter((_, i) => i !== index);
-        setTareas(nuevasTareas);
-        sincronizarTareas(nuevasTareas); // Sincroniza con el servidor
+    // Eliminar una tarea específica
+    const eliminarTarea = (id) => {
+        const requestOptions = {
+            method: "DELETE",
+            redirect: "follow"
+        };
+        fetch(`https://playground.4geeks.com/todo/todos/${id}`, requestOptions)
+            .then(response => {
+                if (response.ok) {
+                    setTareas(prevTareas => prevTareas.filter(tarea => tarea.id !== id));
+                } else {
+                    console.error('Error al eliminar tarea');
+                }
+            })
+            .catch(error => console.error('Error al eliminar tarea:', error));
     };
 
-    // Nueva función para limpiar todas las tareas
-    const limpiarTareas = () => {
-        fetch(API_URL, { method: "DELETE" })
-            .then(resp => {
-                if (!resp.ok) throw new Error('Error al eliminar las tareas');
-                setTareas([]); // Vacía la lista en el frontend
-            })
-            .catch(error => {
-                console.error('Error:', error);
-            });
+    // Eliminar todas las tareas
+    const eliminarTodasLasTareas = () => {
+        const requestOptions = {
+            method: "DELETE",
+            redirect: "follow"
+        };
+        Promise.all(tareas.map(tarea =>
+            fetch(`https://playground.4geeks.com/todo/todos/${tarea.id}`, requestOptions)
+        ))
+            .then(() => setTareas([]))
+            .catch(error => console.error('Error al eliminar todas las tareas:', error));
     };
 
     return (
@@ -84,20 +80,20 @@ const Todolist = () => {
                     }}
                     placeholder="¿Qué harás hoy?"
                 />
-                <div className="list-group">
-                    {tareas.length > 0 ? tareas.map((item, index) => (
+                <div className="list-group mt-3">
+                    {tareas.length > 0 ? tareas.map((tarea, index) => (
                         <li
-                            key={index}
+                            key={tarea.id}
                             className="list-group-item"
                             onMouseEnter={() => setHoveredIndex(index)}
                             onMouseLeave={() => setHoveredIndex(-1)}
                         >
                             <div className="relative-container">
-                                {item}
+                                {tarea.label}
                                 {hoveredIndex === index &&
                                     <span
                                         className="absolute-close"
-                                        onClick={() => eliminarTarea(index)}
+                                        onClick={() => eliminarTarea(tarea.id)}
                                     >
                                         X
                                     </span>
@@ -108,11 +104,12 @@ const Todolist = () => {
                         <li className="list-group-item">No hay tareas</li>
                     }
                 </div>
-                <p className="container paper">Total de tareas: {tareas.length}</p>
-                {/* Botón para limpiar todas las tareas */}
-                <button onClick={limpiarTareas} className="btn btn-danger mt-3">
-                    Limpiar todas las tareas
-                </button>
+                <p className="container paper mt-3">Total de tareas: {tareas.length}</p>
+                <div className="text-center my-3">
+                    <button onClick={eliminarTodasLasTareas} className="btn btn-danger mt-2">
+                        Eliminar todas las tareas
+                    </button>
+                </div>
             </div>
         </>
     );
